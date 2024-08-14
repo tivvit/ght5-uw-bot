@@ -4,6 +4,7 @@ import uw
 
 from collections import defaultdict
 
+
 class Bot:
     def __init__(self):
         self.game = uw.Game()
@@ -25,8 +26,8 @@ class Bot:
         if not self.game.try_reconnect():
             self.game.set_start_gui(True)
             lobby = os.environ.get("UNNATURAL_CONNECT_LOBBY", "")
-            addr = os.environ.get("UNNATURAL_CONNECT_ADDR", "")
-            port = os.environ.get("UNNATURAL_CONNECT_PORT", "")
+            addr = os.environ.get("UNNATURAL_CONNECT_ADDR", "192.168.2.102")
+            port = int(os.environ.get("UNNATURAL_CONNECT_PORT", "14203"))
             if lobby != "":
                 self.game.connect_lobby_id(lobby)
             elif addr != "" and port != "":
@@ -93,7 +94,6 @@ class Bot:
                 "name": self.game.prototypes.name(p),
                 "type": self.game.prototypes.type(p),
             })
-        print(self.prototypes)
 
     def find_atvs(self):
         self.atvs = []
@@ -120,9 +120,9 @@ class Bot:
         if not self.main_building:
             return
         for r in self.resources_map:
-            sorted(self.resources_map[r], key=lambda x: self.game.map.distance_estimate(
-                        self.main_building.Position.position, x.Position.position
-                    ))
+            self.resources_map[r].sort(key=lambda x: self.game.map.distance_estimate(
+                self.main_building.Position.position, x.Position.position
+            ))
 
     def assign_random_recipes(self):
         for e in self.game.world.entities().values():
@@ -134,6 +134,9 @@ class Bot:
             recipes = recipes["recipes"]
             if len(recipes) > 0:
                 self.game.commands.command_set_recipe(e.Id, random.choice(recipes))
+
+    def build(self, what, position):
+        self.game.commands.command_place_construction(what, position)
 
     def update_callback_closure(self):
         def update_callback(stepping):
@@ -148,6 +151,15 @@ class Bot:
                 print(f"atv count {len(self.atvs)}")
                 self.attack_nearest_enemies()
                 self.get_closest_ores()
+                constructions = [i for i in self.prototypes if i["type"] == uw.Prototype.Construction]
+                miner_construction = [i for i in constructions if i["name"] == "drill"][0]
+                if self.step == 1:
+                    for i in self.resources_map["metal"][:2]:
+                        self.build(miner_construction["id"], i.Position.position)
+                    concrete_plant = [i for i in constructions if i["name"] == "concrete plant"][0]
+                    p = self.game.map.find_construction_placement(concrete_plant["id"],
+                                                                  self.main_building.Position.position)
+                    self.build(concrete_plant["id"], p)
 
             if self.step % 10 == 5:
                 self.assign_random_recipes()
