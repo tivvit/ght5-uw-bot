@@ -134,9 +134,14 @@ class Bot:
             recipes = recipes["recipes"]
             if len(recipes) > 0:
                 self.game.commands.command_set_recipe(e.Id, random.choice(recipes))
+            # for r in recipes:
+            #     if r.get("name", "") == "golem":
+            #         self.game.commands.command_set_recipe(e.Id, r)
 
     def build(self, what, position):
-        self.game.commands.command_place_construction(what, position)
+        p = self.game.map.find_construction_placement(what,
+                                                      position)
+        self.game.commands.command_place_construction(what, p)
 
     def update_callback_closure(self):
         def update_callback(stepping):
@@ -148,18 +153,23 @@ class Bot:
                 self.init_prototypes()
                 self.find_main_base()
                 self.find_atvs()
+                self.
                 print(f"atv count {len(self.atvs)}")
                 self.attack_nearest_enemies()
                 self.get_closest_ores()
                 constructions = [i for i in self.prototypes if i["type"] == uw.Prototype.Construction]
+                unit = [i for i in self.prototypes if i["type"] == uw.Prototype.Unit]
                 miner_construction = [i for i in constructions if i["name"] == "drill"][0]
                 if self.step == 1:
                     for i in self.resources_map["metal"][:2]:
                         self.build(miner_construction["id"], i.Position.position)
+                        factory_construction = [i for i in constructions if i["name"] == "factory"][0]
+                        self.build(factory_construction["id"], i.Position.position)
+                    for i in self.resources_map["crystals"][:2]:
+                        self.build(miner_construction["id"], i.Position.position)
                     concrete_plant = [i for i in constructions if i["name"] == "concrete plant"][0]
-                    p = self.game.map.find_construction_placement(concrete_plant["id"],
-                                                                  self.main_building.Position.position)
-                    self.build(concrete_plant["id"], p)
+                    self.build(concrete_plant["id"], self.main_building.Position.position)
+
 
             if self.step % 10 == 5:
                 self.assign_random_recipes()
