@@ -2,6 +2,7 @@ import os
 import random
 import uw
 
+from collections import defaultdict
 
 class Bot:
     def __init__(self):
@@ -11,9 +12,16 @@ class Bot:
         # register update callback
         self.game.add_update_callback(self.update_callback_closure())
 
+        self.prototypes = []
+        self.resources_map = defaultdict(list)  # resource types sorted by distance
+        self.used_resources = set()
+        self.main_building = None
+        self.atvs = []
+
     def start(self):
         self.game.log_info("starting")
         self.game.set_player_name("tivvit&ales")
+
         if not self.game.try_reconnect():
             self.game.set_start_gui(True)
             lobby = os.environ.get("UNNATURAL_CONNECT_LOBBY", "")
@@ -32,9 +40,9 @@ class Bot:
             e
             for e in self.game.world.entities().values()
             if e.own()
-            and e.has("Unit")
-            and self.game.prototypes.unit(e.Proto.proto)
-            and self.game.prototypes.unit(e.Proto.proto).get("dps", 0) > 0
+               and e.has("Unit")
+               and self.game.prototypes.unit(e.Proto.proto)
+               and self.game.prototypes.unit(e.Proto.proto).get("dps", 0) > 0
         ]
         if not own_units:
             return
@@ -64,6 +72,58 @@ class Bot:
                     _id, self.game.commands.fight_to_entity(enemy.Id)
                 )
 
+    def find_main_base(self):
+        if self.main_building:
+            return
+        for e in self.game.world.entities().values():
+            if not (e.own() and hasattr(e, "Unit")):
+                continue
+            unit = self.game.prototypes.unit(e.Proto.proto)
+            if not unit:
+                continue
+            if unit.get("name", "") == "nucleus":
+                self.main_building = e
+
+    def init_prototypes(self):
+        if self.prototypes:
+            return
+        for p in self.game.prototypes.all():
+            self.prototypes.append({
+                "id": p,
+                "name": self.game.prototypes.name(p),
+                "type": self.game.prototypes.type(p),
+            })
+        print(self.prototypes)
+
+    def find_atvs(self):
+        self.atvs = []
+        for e in self.game.world.entities().values():
+            if not (e.own() and hasattr(e, "Unit")):
+                continue
+            unit = self.game.prototypes.unit(e.Proto.proto)
+            if not unit:
+                continue
+            if unit.get("name", "") == "ATV":
+                self.atvs.append(e)
+
+    def get_closest_ores(self):
+        for e in self.game.world.entities().values():
+            if not (hasattr(e, "Unit")) and not e.own():
+                continue
+            unit = self.game.prototypes.unit(e.Proto.proto)
+            if not unit:
+                continue
+            if "deposit" not in unit.get("name", ""):
+                continue
+            name = unit.get("name", "").replace(" deposit", "")
+            self.resources_map[name].append(e)
+        if not self.main_building:
+            return
+        for r in self.resources_map:
+            sorted(self.resources_map[r], key=lambda x: self.game.map.distance_estimate(
+                        self.main_building.Position.position, x.Position.position
+                    ))
+
     def assign_random_recipes(self):
         for e in self.game.world.entities().values():
             if not (e.own() and hasattr(e, "Unit")):
@@ -82,7 +142,12 @@ class Bot:
             self.step += 1  # save some cpu cycles by splitting work over multiple steps
 
             if self.step % 10 == 1:
+                self.init_prototypes()
+                self.find_main_base()
+                self.find_atvs()
+                print(f"atv count {len(self.atvs)}")
                 self.attack_nearest_enemies()
+                self.get_closest_ores()
 
             if self.step % 10 == 5:
                 self.assign_random_recipes()
