@@ -40,7 +40,7 @@ class Bot:
             return
 
         if len(own_units) < 5:
-            continue
+            return
 
         enemy_units = [
             e
