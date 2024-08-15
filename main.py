@@ -127,6 +127,9 @@ class Bot:
             for e in self.game.world.entities().values():
                 if not hasattr(e, 'Player'):
                     continue
+                # skip observer (max uint)
+                if e.Player.force == 4294967295:
+                    continue
                 players[e.Player.steamUserId] = e.Player.force
             return players
         except Exception as e:
@@ -142,7 +145,6 @@ class Bot:
                     "state": e.Force.state,
                     "defeated": bool(e.Force.state & (1 << 1))
                 }
-            print('FORCES:')
             return forces
         except Exception as e:
             print(e)
@@ -555,6 +557,8 @@ class Bot:
                                                              i["type"] == uw.Prototype.Construction}
                     self.players = self.inspect_players()
                     self.forces = self.inspect_forces()
+                    pprint(self.players)
+                    pprint(self.forces)
 
                 # print(set(self.game.map.overview()))
                 # pprint([e for e in self.game.map.overview() if e & uw.OverviewFlags.Resource])
