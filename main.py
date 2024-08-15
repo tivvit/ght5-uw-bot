@@ -123,18 +123,29 @@ class Bot:
 
     def inspect_players(self):
         try:
-            players = set()
+            players = dict()
             for e in self.game.world.entities().values():
-                if not hasattr(e, 'Player') or not hasattr(e, 'Owner'):
+                if not hasattr(e, 'Player'):
                     continue
-                # players[e.Player.steamUserId] = e.Owner.force
-                players.add(e.Player.steamUserId)
-            print('PLAYERS:')
-            pprint(players)
+                players[e.Player.steamUserId] = e.Player.force
+            return players
         except Exception as e:
-            print('>>> Players not recognised <<<')
             print(e)
-            pass
+
+    def inspect_forces(self):
+        try:
+            forces = dict()
+            for e in self.game.world.entities().values():
+                if not hasattr(e, 'Force'):
+                    continue
+                forces[e.Id] = {
+                    "state": e.Force.state,
+                    "defeated": bool(e.Force.state & (1 << 1))
+                }
+            print('FORCES:')
+            return forces
+        except Exception as e:
+            print(e)
 
     def attack_nearest_enemy(self, unit, enemy_units):
         _id = unit.Id
@@ -276,6 +287,19 @@ class Bot:
             paladin_recipe = self.recipes_prototypes["paladin"]
             if paladin_recipe["id"] in recipes:
                 self.game.commands.command_set_recipe(e.Id, paladin_recipe["id"])
+
+    def assign_atv_recipes(self):
+        for e in self.game.world.entities().values():
+            if not (e.own() and hasattr(e, "Unit")):
+                continue
+            recipes = self.game.prototypes.unit(e.Proto.proto)
+            if not recipes:
+                continue
+            recipes = recipes["recipes"]
+            paladin_recipe = self.recipes_prototypes["ATV"]
+            if paladin_recipe["id"] in recipes:
+                self.game.commands.command_set_recipe(e.Id, paladin_recipe["id"])
+                break
 
     def assign_arsenal_recipes(self):
         for e in self.game.world.entities().values():
@@ -529,7 +553,8 @@ class Bot:
                                                 i["type"] == uw.Prototype.Resource}
                     self.inverted_construction_prototypes = {i["id"]: i for i in self.prototypes if
                                                              i["type"] == uw.Prototype.Construction}
-                    self.inspect_players()
+                    self.players = self.inspect_players()
+                    self.forces = self.inspect_forces()
 
                 # print(set(self.game.map.overview()))
                 # pprint([e for e in self.game.map.overview() if e & uw.OverviewFlags.Resource])
@@ -572,6 +597,7 @@ class Bot:
                         self.game.commands.command_set_priority(i.Id, uw.Priority.Normal)
 
                 # Repair buildings
+                # TODO repair one per tick
                 for i in self.find_constructed_units("pump"):
                     if hasattr(i, 'Priority') and i.Priority.priority == uw.Priority.Disabled:
                         print('repairing pump')
@@ -587,10 +613,15 @@ class Bot:
                             print('repairing', name)
                             self.game.commands.command_set_priority(i.Id, uw.Priority.Normal)
 
+                # TODO this should be factory recipes (including atv)
                 self.assign_paladin_recipes()
                 self.assign_laboratory_recipes()
                 self.assign_arsenal_recipes()
                 self.assign_bot_assembler_recipes()
+
+                # TODO hotfix
+                if len(self.atvs) < 10 and len(self.find_units("factory")) > 0:
+                    self.assign_atv_recipes()
 
                 # TODO for each shooting unit
                 # * move to the edge of the base
