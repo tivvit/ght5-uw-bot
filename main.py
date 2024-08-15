@@ -20,9 +20,12 @@ class Bot:
         self.used_resources = set()
         self.main_building = None
         self.recipes_prototypes = {}
+        self.inverted_recipes_prototypes = {}
         self.resource_prototypes = {}
         self.construction_prototypes = {}
         self.inverted_construction_prototypes = {}
+        self.drills_by_type = {}
+        self.constructed_drills_by_type = {}
         self.atvs = []
         self.built = False
 
@@ -46,6 +49,7 @@ class Bot:
         self.game.log_info("done")
 
     def attack_nearest_enemies(self):
+        # TODO huddle the army first
         own_units = [
             e
             for e in self.game.world.entities().values()
@@ -57,7 +61,7 @@ class Bot:
         if not own_units:
             return
 
-        if len(own_units) < 10:
+        if len(own_units) < 100:
             return
 
         enemy_units = [
@@ -164,6 +168,13 @@ class Bot:
         for i in range(n - self.count_construction(name)):
             self.build(name, random.choice(positions))
 
+    def ensure_talos(self, n=10):
+        if len(self.find_units("concrete plant")) < 2:
+            return
+        if len(self.find_units('talos')) < n and not len(self.find_constructed_units('talos')):
+            close_positions = self.get_points_in_radius(self.main_building.Position.position, 140)
+            self.build_construction("talos", len(self.find_units('talos')) + 1, close_positions)
+
     def get_resources(self):
         r = []
         for e in self.game.world.entities().values():
@@ -174,6 +185,64 @@ class Bot:
                 continue
             r.append(e)
         return r
+
+    def update_drills_by_type(self):
+        self.drills_by_type = defaultdict(list)
+        for d in self.find_units("drill"):
+            if d.Recipe.recipe in self.inverted_recipes_prototypes:
+                self.drills_by_type[self.inverted_recipes_prototypes[d.Recipe.recipe]["name"]].append(d)
+
+    def update_constructed_drills_by_type(self):
+        self.constructed_drills_by_type = defaultdict(list)
+        for d in self.find_constructed_units("drill"):
+            if d.Recipe.recipe in self.inverted_recipes_prototypes:
+                self.constructed_drills_by_type[self.inverted_recipes_prototypes[d.Recipe.recipe]["name"]].append(d)
+
+    def ensure_drills(self, drill_counts):
+        for type_name, n in drill_counts.items():
+            if (n - len(self.drills_by_type[type_name]) - len(self.constructed_drills_by_type[type_name])) > 0:
+                # TODO consider distance
+                for i in self.resources_map[type_name]:
+                    used = False
+                    for ent in self.game.map.entities(i.Position.position):
+                        e = self.game.world.entity(ent)
+                        if e.own():
+                            used = True
+                    if used:
+                        continue
+                    self.build("drill", i.Position.position)
+                    break
+
+    def ensure_concrete_plants(self):
+        for i in self.drills_by_type["metal"]:
+            own = False
+            # TODO how to use connected
+            for j in self.game.map.area_neighborhood(i.Position.position, 25):
+                for ent in self.game.map.entities(j):
+                    e = self.game.world.entity(ent)
+                    if not e.own():
+                        continue
+                    if self.inverted_construction_prototypes.get(e.Proto.proto, {}).get("name",
+                                                                                        "") == "concrete plant":
+                        own = True
+                        break
+                    if not e.has("Unit"):
+                        continue
+                    unit = self.game.prototypes.unit(e.Proto.proto)
+                    if not unit:
+                        continue
+                    if unit.get("name", "") == "concrete plant":
+                        own = True
+                        break
+            if own:
+                continue
+            self.build("concrete plant", int(i.Position.position))
+
+    def ensure_factories(self):
+        if len(self.drills_by_type["metal"]) > 1:
+            close_positions = self.get_points_in_radius(self.main_building.Position.position, 60)
+            self.build_construction("factory", 2, close_positions)
+
 
     def update_callback_closure(self):
         def update_callback(stepping):
@@ -192,84 +261,30 @@ class Bot:
                 self.attack_nearest_enemies()
                 self.get_closest_ores()
                 unit = [i for i in self.prototypes if i["type"] == uw.Prototype.Unit]
-                self.construction_prototypes = {i["name"]: i for i in self.prototypes if
-                                                i["type"] == uw.Prototype.Construction}
-                self.recipes_prototypes = {i["name"]: i for i in self.prototypes if
-                                           i["type"] == uw.Prototype.Recipe}
-                self.resource_prototypes = {i["name"]: i for i in self.prototypes if
-                                            i["type"] == uw.Prototype.Resource}
-                # print(self.recipes_prototypes, 'recipes_prototypes')
-                self.inverted_construction_prototypes = {i["id"]: i for i in self.prototypes if
-                                                         i["type"] == uw.Prototype.Construction}
+
+                if self.step == 1:
+                    self.construction_prototypes = {i["name"]: i for i in self.prototypes if
+                                                    i["type"] == uw.Prototype.Construction}
+                    self.recipes_prototypes = {i["name"]: i for i in self.prototypes if
+                                               i["type"] == uw.Prototype.Recipe}
+                    self.resource_prototypes = {i["name"]: i for i in self.prototypes if
+                                                i["type"] == uw.Prototype.Resource}
+                    self.inverted_construction_prototypes = {i["id"]: i for i in self.prototypes if
+                                                             i["type"] == uw.Prototype.Construction}
 
                 # print(set(self.game.map.overview()))
-                # pprint([e for e in self.game.map.overview() if e & uw.fOverviewFlags.Resource])
+                # pprint([e for e in self.game.map.overview() if e & uw.OverviewFlags.Resource])
 
-                self.inverse_recipes_prototypes = {i['id']: i for i in self.prototypes if
-                                                   i["type"] == uw.Prototype.Recipe}
-                drills_by_type = defaultdict(list)
-                for d in self.find_units("drill"):
-                    if d.Recipe.recipe in self.inverse_recipes_prototypes:
-                        drills_by_type[self.inverse_recipes_prototypes[d.Recipe.recipe]["name"]].append(d)
+                self.inverted_recipes_prototypes = {i['id']: i for i in self.prototypes if
+                                                    i["type"] == uw.Prototype.Recipe}
 
-                constructed_drills_by_type = defaultdict(list)
-                for d in self.find_constructed_units("drill"):
-                    if d.Recipe.recipe in self.inverse_recipes_prototypes:
-                        constructed_drills_by_type[self.inverse_recipes_prototypes[d.Recipe.recipe]["name"]].append(d)
+                self.update_drills_by_type()
+                self.update_constructed_drills_by_type()
 
-                if (2 - len(drills_by_type["metal"]) - len(constructed_drills_by_type["metal"])) > 0:
-                    # TODO consider distance
-                    for i in self.resources_map["metal"]:
-                        used = False
-                        for ent in self.game.map.entities(i.Position.position):
-                            e = self.game.world.entity(ent)
-                            if e.own():
-                                used = True
-                        if used:
-                            continue
-                        self.build("drill", i.Position.position)
-                        break
-
-                if (1 - len(drills_by_type["crystals"]) - len(constructed_drills_by_type["crystals"])) > 0:
-                    for i in self.resources_map["crystals"]:
-                        used = False
-                        for ent in self.game.map.entities(i.Position.position):
-                            e = self.game.world.entity(ent)
-                            if e.own():
-                                used = True
-                        if used:
-                            continue
-                        self.build("drill", i.Position.position)
-                        break
-
-                for i in drills_by_type["metal"]:
-                    own = False
-                    # TODO how to use connected
-                    for j in self.game.map.area_neighborhood(i.Position.position, 25):
-                        for ent in self.game.map.entities(j):
-                            e = self.game.world.entity(ent)
-                            if not e.own():
-                                continue
-                            if self.inverted_construction_prototypes.get(e.Proto.proto, {}).get("name",
-                                                                                                "") == "concrete plant":
-                                own = True
-                                break
-                            if not e.has("Unit"):
-                                continue
-                            unit = self.game.prototypes.unit(e.Proto.proto)
-                            if not unit:
-                                continue
-                            if unit.get("name", "") == "concrete plant":
-                                own = True
-                                break
-
-                    if own:
-                        continue
-                    self.build("concrete plant", int(i.Position.position))
-
-                if len(drills_by_type["metal"]) > 1:
-                    close_positions = self.get_points_in_radius(self.main_building.Position.position, 50)
-                    self.build_construction("factory", 2, close_positions)
+                self.ensure_drills({'metal': 3, 'crystals': 1})
+                self.ensure_concrete_plants()
+                self.ensure_factories()
+                self.ensure_talos(n=10)
 
                 resource_count = Counter()
                 for r in self.get_resources():
@@ -286,11 +301,6 @@ class Bot:
                 if resource_count["reinforced concrete"] < 4:
                     for i in self.find_units("concrete plant"):
                         self.game.commands.command_set_priority(i.Id, uw.Priority.Normal)
-
-                if len(self.find_units("concrete plant")) > 1:
-                    close_positions = self.get_points_in_radius(self.main_building.Position.position, 140)
-                    # TODO scaling
-                    self.build_construction("talos", 10, close_positions)
 
                 self.assign_paladin_recipes()
 
