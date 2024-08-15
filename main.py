@@ -8,6 +8,8 @@ from collections import Counter
 
 {'drill': {'recipe': 'metal', 'n': 3, 'by': None, 'dependency': {}}}
 
+# TODO handle drills
+# TODO handle pumps
 # TODO handle taloses
 # 'name': 'drill', 'recipe': 'metal', 'n': 1},
 #                      {'name': 'concrete plant', 'n': 2}
@@ -110,7 +112,7 @@ class Bot:
             addr = os.environ.get("UNNATURAL_CONNECT_ADDR", "")
             # addr = os.environ.get("UNNATURAL_CONNECT_ADDR", "192.168.2.102")
             port = os.environ.get("UNNATURAL_CONNECT_PORT", "")
-            # port = int(os.environ.get("UNNATURAL_CONNECT_PORT", "54813"))
+            # port = int(os.environ.get("UNNATURAL_CONNECT_PORT", "45528"))
             if lobby != "":
                 self.game.connect_lobby_id(lobby)
             elif addr != "" and port != "":
@@ -118,6 +120,21 @@ class Bot:
             else:
                 self.game.connect_new_server()
         self.game.log_info("done")
+
+    def inspect_players(self):
+        try:
+            players = set()
+            for e in self.game.world.entities().values():
+                if not hasattr(e, 'Player') or not hasattr(e, 'Owner'):
+                    continue
+                # players[e.Player.steamUserId] = e.Owner.force
+                players.add(e.Player.steamUserId)
+            print('PLAYERS:')
+            pprint(players)
+        except Exception as e:
+            print('>>> Players not recognised <<<')
+            print(e)
+            pass
 
     def attack_nearest_enemy(self, unit, enemy_units):
         _id = unit.Id
@@ -133,7 +150,7 @@ class Bot:
                 _id, self.game.commands.fight_to_entity(enemy.Id)
             )
 
-    def attack_nearest_enemies(self):
+    def atack_strategy(self):
         # TODO huddle the army first
         own_units = [
             e
@@ -475,6 +492,11 @@ class Bot:
             close_positions = self.get_points_in_radius(self.main_building.Position.position, 60)
             self.build_construction("factory", 2, close_positions)
 
+    def ensure_arsenal2(self):
+        if len(self.pumps_by_type["oil"]) > 0:
+            close_positions = self.get_points_in_radius(self.main_building.Position.position, 80)
+            self.build_construction("arsenal", 2, close_positions)
+
     def ensure_bot_assembler(self):
         if len(self.drills_by_type["metal"]) > 1:
             close_positions = self.get_points_in_radius(self.main_building.Position.position, 60)
@@ -494,7 +516,7 @@ class Bot:
                 self.find_main_base()
                 self.atvs = self.find_units("ATV")
                 # print(f"atv count {len(self.atvs)}")
-                self.attack_nearest_enemies()
+                self.atack_strategy()
                 self.get_closest_ores()
                 unit = [i for i in self.prototypes if i["type"] == uw.Prototype.Unit]
 
@@ -507,6 +529,7 @@ class Bot:
                                                 i["type"] == uw.Prototype.Resource}
                     self.inverted_construction_prototypes = {i["id"]: i for i in self.prototypes if
                                                              i["type"] == uw.Prototype.Construction}
+                    self.inspect_players()
 
                 # print(set(self.game.map.overview()))
                 # pprint([e for e in self.game.map.overview() if e & uw.OverviewFlags.Resource])
@@ -523,9 +546,10 @@ class Bot:
                 self.ensure_pumps({'oil': 1})
                 self.ensure_concrete_plants()
                 self.ensure_factories()
-                self.ensure_talos(n=200)
+                self.ensure_talos(n=30)
                 self.ensure_laboratory()
                 self.ensure_arsenal()
+                # self.ensure_arsenal2()
                 self.ensure_bot_assembler()
 
                 resource_count = Counter()
@@ -536,7 +560,10 @@ class Bot:
                 if self.step % 50 == 1:
                     pprint(resource_count)
 
-                if resource_count["reinforced concrete"] > 8:
+                # for i in self.find_units("factory"):
+                #     self.game.commands.command_set_priority(i.Id, uw.Priority.Disabled)
+
+                if resource_count["reinforced concrete"] > 10:
                     for i in self.find_units("concrete plant"):
                         self.game.commands.command_set_priority(i.Id, uw.Priority.Disabled)
 
@@ -544,10 +571,21 @@ class Bot:
                     for i in self.find_units("concrete plant"):
                         self.game.commands.command_set_priority(i.Id, uw.Priority.Normal)
 
-                # TODO repair drills
+                # Repair buildings
+                for i in self.find_constructed_units("pump"):
+                    if hasattr(i, 'Priority') and i.Priority.priority == uw.Priority.Disabled:
+                        print('repairing pump')
+                        self.game.commands.command_set_priority(i.Id, uw.Priority.Normal)
                 for i in self.find_constructed_units("drill"):
                     if hasattr(i, 'Priority') and i.Priority.priority == uw.Priority.Disabled:
+                        print('repairing drill')
                         self.game.commands.command_set_priority(i.Id, uw.Priority.Normal)
+                for d in ORDER:
+                    name = list(d)[0]
+                    for i in self.find_constructed_units(name):
+                        if hasattr(i, 'Priority') and i.Priority.priority == uw.Priority.Disabled:
+                            print('repairing', name)
+                            self.game.commands.command_set_priority(i.Id, uw.Priority.Normal)
 
                 self.assign_paladin_recipes()
                 self.assign_laboratory_recipes()
