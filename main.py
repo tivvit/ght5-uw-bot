@@ -279,11 +279,11 @@ class Bot:
                 if self.step % 50 == 1:
                     pprint(resource_count)
 
-                if resource_count["reinforced concrete"] > 5:
+                if resource_count["reinforced concrete"] > 8:
                     for i in self.find_units("concrete plant"):
                         self.game.commands.command_set_priority(i.Id, uw.Priority.Disabled)
 
-                if resource_count["reinforced concrete"] < 2:
+                if resource_count["reinforced concrete"] < 4:
                     for i in self.find_units("concrete plant"):
                         self.game.commands.command_set_priority(i.Id, uw.Priority.Normal)
 
