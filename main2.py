@@ -7,8 +7,6 @@ from collections import defaultdict
 from collections import Counter
 from copy import deepcopy
 
-{'drill': {'recipe': 'metal', 'n': 3, 'by': None, 'dependency': {}}}
-
 # TODO handle drills
 # TODO handle pumps
 # TODO handle taloses
@@ -23,6 +21,7 @@ ORDER = [
                 'dependencies': [
                     [{'name': 'drill', 'recipe': 'metal', 'n': 1}],
                     [{'name': 'drill', 'recipe': 'metal', 'n': 2}],
+                    [{'name': 'drill', 'recipe': 'metal', 'n': 3}],
                 ],
             },
     },
@@ -44,7 +43,8 @@ ORDER = [
                 'by': {'name': 'drill', 'recipe': 'metal', 'radius': 25},
                 'dependencies': [
                     [{'name': 'drill', 'recipe': 'metal', 'n': 2},
-                     {'name': 'concrete plant', 'n': 2}],
+                     {'name': 'concrete plant', 'n': 2},
+                     {'name': 'bot assembler', 'n': 1}],
                 ],
             },
     },
@@ -55,7 +55,7 @@ ORDER = [
                 'by': {'name': 'pump', 'recipe': 'oil', 'radius': 25},
                 'dependencies': [
                     [{'name': 'pump', 'recipe': 'oil', 'n': 1},
-                     {'name': 'concrete plant', 'n': 2}],
+                     {'name': 'concrete plant', 'n': 3}],
                     # [{'name': 'pump', 'recipe': 'oil', 'n': 1}, # TODO 2 arsenals next to one oil
                     #  {'name': 'concrete plant', 'n': 2},
                     #  {'name': 'bot assembler', 'n': 1}],
@@ -70,7 +70,7 @@ ORDER = [
                 'dependencies': [
                     [{'name': 'drill', 'recipe': 'crystals', 'n': 1},
                      {'name': 'concrete plant', 'n': 2},
-                     {'name': 'factory', 'n': 2}],
+                     {'name': 'factory', 'n': 1}],
                 ],
             },
     },
@@ -88,17 +88,32 @@ ORDER = [
                 ],
             },
     },
-    #############
+]
+
+COLOSSUS_ORDER = [
     {
         'blender':
             {
                 'recipe': 'quark foam',
-                'by': {'name': 'nucleus', 'radius': 80},  # TODO next to metal
+                'by': {'name': 'pump', 'recipe': 'aether', 'radius': 25},
                 'dependencies': [
                     [{'name': 'drill', 'recipe': 'metal', 'n': 2},
                      {'name': 'pump', 'recipe': 'aether', 'n': 1},
                      {'name': 'concrete plant', 'n': 2},
+                     {'name': 'juggernaut', 'n': 1},
                      {'name': 'bot assembler', 'n': 1}]
+                ],
+            },
+    },
+    {
+        'blender':
+            {
+                'recipe': 'quark foam',
+                'by': {'name': 'blender', 'radius': 60},
+                'dependencies': [
+                    [{'name': 'blender', 'recipe': 'quark foam', 'n': 1}],
+                    [{'name': 'blender', 'recipe': 'quark foam', 'n': 1}],
+                    [{'name': 'blender', 'recipe': 'quark foam', 'n': 2}],
                 ],
             },
     },
@@ -110,6 +125,7 @@ ORDER = [
                 'dependencies': [
                     [{'name': 'drill', 'recipe': 'metal', 'n': 2},
                      {'name': 'concrete plant', 'n': 2},
+                     {'name': 'juggernaut', 'n': 1},
                      {'name': 'bot assembler', 'n': 1}]
                 ],
             },
@@ -131,6 +147,18 @@ ORDER = [
             {
                 'recipe': 'quantum ray',
                 'by': {'name': 'generator', 'recipe': 'power cell', 'radius': 25},
+                'dependencies': [
+                    [{'name': 'generator', 'recipe': 'power cell', 'n': 1},
+                     {'name': 'blender', 'recipe': 'quark foam', 'n': 1},
+                     {'name': 'bot assembler', 'n': 1}],
+                ],
+            },
+    },
+    {
+        'laboratory':
+            {
+                'recipe': 'atomic forge',
+                'by': {'name': 'nucleus', 'radius': 140},
                 'dependencies': [
                     [{'name': 'generator', 'recipe': 'power cell', 'n': 1},
                      {'name': 'blender', 'recipe': 'quark foam', 'n': 1},
@@ -172,13 +200,15 @@ ORDER = [
                      {'name': 'drill', 'recipe': 'crystals', 'n': 1},
                      {'name': 'smelter', 'recipe': 'alloys', 'n': 1},
                      {'name': 'laboratory', 'recipe': 'quantum ray', 'n': 1},
+                     {'name': 'laboratory', 'recipe': 'atomic forge', 'n': 1},
                      {'name': 'laboratory', 'recipe': 'shield projector', 'n': 1},
                      {'name': 'forgepress', 'recipe': 'reinforced plates', 'n': 1}],
                 ],
             },
     },
-
 ]
+
+ORDER.extend(COLOSSUS_ORDER)
 
 
 class Bot:
@@ -214,7 +244,7 @@ class Bot:
             addr = os.environ.get("UNNATURAL_CONNECT_ADDR", "")
             # addr = os.environ.get("UNNATURAL_CONNECT_ADDR", "192.168.2.102")
             port = os.environ.get("UNNATURAL_CONNECT_PORT", "")
-            # port = int(os.environ.get("UNNATURAL_CONNECT_PORT", "7627"))
+            # port = int(os.environ.get("UNNATURAL_CONNECT_PORT", "39848"))
             if lobby != "":
                 self.game.connect_lobby_id(lobby)
             elif addr != "" and port != "":
@@ -262,29 +292,11 @@ class Bot:
                 building_recipes[name].append(recipe_name)
         return building_recipes
 
-    q = {
-        'concrete plant':
-            {
-                'recipe': 'juggernaut',
-                'by': {'name': 'drill', 'recipe': 'metal', 'radius': 25},
-                'dependencies': [
-                    [{'name': 'drill', 'recipe': 'metal', 'n': 1}],
-                    [{'name': 'drill', 'recipe': 'metal', 'n': 2}],
-                ],
-            },
-    },
-
     def build_buildings(self):
         finished_buildings = self._extract_building_names(self.find_units())
         finished_buildings_recipes = self._extract_building_recipes(finished_buildings)
         constructed_buildings = self._extract_building_names(self.find_constructed_units())
         constructed_buildings_recipes = self._extract_building_recipes(constructed_buildings)
-        print('constructed_buildings:')
-        pprint(self.find_constructed_units())
-        pprint(constructed_buildings)
-        pprint(constructed_buildings_recipes)
-        print('finished_buildings_recipes')
-        pprint(finished_buildings_recipes)
 
         for order in ORDER:
             interrupt = False
@@ -333,8 +345,6 @@ class Bot:
                 # TODO check if created building need assignment, but don't change what has been set
                 if 'recipe' in requirements:
                     requirement_set = False
-                    print('constructed_buildings when setting recipe', name, requirements['recipe'])
-                    print(list(zip(constructed_buildings[name], constructed_buildings_recipes[name])))
                     for i, recipe in zip(constructed_buildings[name], constructed_buildings_recipes[name]):
                         if recipe == 'None':
                             paladin_recipe = self.recipes_prototypes[requirements['recipe']]
@@ -348,8 +358,6 @@ class Bot:
 
                 if 'recipe' in requirements:
                     requirement_set = False
-                    print('finished_buildings when setting recipe', name, requirements['recipe'])
-                    print(list(zip(finished_buildings[name], finished_buildings_recipes[name])))
                     for i, recipe in zip(finished_buildings[name], finished_buildings_recipes[name]):
                         if recipe == 'None':
                             paladin_recipe = self.recipes_prototypes[requirements['recipe']]
@@ -362,13 +370,11 @@ class Bot:
                         break
 
                 by = requirements['by']
-                print(name, 'by', by)
                 if by['name'] == 'nucleus':
                     close_positions = self.get_points_in_radius(self.main_building.Position.position, by['radius'])
-                    self.build(name, random.choice(close_positions))
-                    # self.build_construction(name, n_in_place + 1, close_positions)
+                    self.build(name, random.choice(close_positions), by['radius'] == 25)
                     print('building', name, 'next to nucleus')
-                    interrupt = True
+                    # interrupt = True
                     break
                 for i, recipe in zip(finished_buildings[by['name']], finished_buildings_recipes[by['name']]):
                     if 'recipe' in by and recipe != by['recipe']:
@@ -395,8 +401,10 @@ class Bot:
                     if own:
                         continue
                     print('building', name)
-                    self.build(name, int(i.Position.position))
-                    interrupt = True
+                    close_positions = self.get_points_in_radius(i.Position.position, 5)
+                    self.build(name, int(random.choice(close_positions)), by['radius'] == 25)
+                    # self.build(name, int(i.Position.position), by['radius'] == 25)
+                    # interrupt = True
                     break
             if interrupt:
                 break
@@ -441,7 +449,7 @@ class Bot:
             ),
         )
         if enemy_units and self.game.map.distance_estimate(enemy_units[0].Position.position,
-                                                           self.main_building.Position.position) < 400:
+                                                           self.main_building.Position.position) < 600:
             for u in own_units:
                 self.attack_nearest_enemy(u, enemy_units)
             return
@@ -531,8 +539,6 @@ class Bot:
             ))
 
     def assign_paladin_recipes(self):
-        n_paladins = 2
-        n_kitsune = 1  # TODO
         for e in self.game.world.entities().values():
             if not (e.own() and hasattr(e, "Unit")):
                 continue
@@ -580,10 +586,22 @@ class Bot:
             if recipe["id"] in recipes:
                 self.game.commands.command_set_recipe(e.Id, recipe["id"])
 
-    def build(self, what, position):
+    def build(self, what, position, nearby=False):
+        if nearby:
+            construction_location_prototype = self.construction_prototypes[what]["id"]
+        else:
+            construction_location_prototype = self.construction_prototypes['experimental assembler']["id"]
+        p = self.game.map.find_construction_placement(construction_location_prototype, position)
+        # print(
+        #     'bbbuilding',
+        #     what,
+        #     nearby,
+        #     position,
+        #     self.game.map.find_construction_placement(self.construction_prototypes[what]["id"], position),
+        #     self.game.map.find_construction_placement(self.construction_prototypes['experimental assembler']["id"],
+        #                                               position)
+        # )
         construction_prototype = self.construction_prototypes[what]["id"]
-        p = self.game.map.find_construction_placement(construction_prototype,
-                                                      position)
         self.game.commands.command_place_construction(construction_prototype, p)
 
     def count_construction(self, name):
@@ -595,9 +613,9 @@ class Bot:
     # TODO remove after order processing
     def build_construction(self, name, n, positions):
         for i in range(n - self.count_construction(name)):
-            self.build(name, random.choice(positions))
+            self.build(name, random.choice(positions), True)
 
-    def ensure_talos(self, n=10):
+    def ensure_talos(self, n):
         other_bases = self.find_other_bases()
         if not other_bases:
             return
@@ -608,12 +626,18 @@ class Bot:
             return
         if len(self.find_units('talos')) < n and not len(self.find_constructed_units('talos')):
             next_other_base = other_bases[len(self.find_units('talos')) % len(other_bases)]
-            close_positions = self.get_points_in_radius(self.main_building.Position.position, 140)
+            close_positions = self.get_points_in_radius(self.main_building.Position.position, 280)
+            override_pos = 0
+            if override_pos and override_pos < len(self.game.map.positions()):
+                direction_pos = override_pos
+            else:
+                direction_pos = next_other_base.Position.position
             close_positions = sorted(
                 close_positions,
                 key=lambda x: self.game.map.distance_estimate(
-                    next_other_base.Position.position, x))
+                    direction_pos, x))
             self.build_construction("talos", len(self.find_units('talos')) + 1, close_positions[:1])
+            # self.build_construction("talos", len(self.find_units('talos')) + 1, close_positions)
 
     def get_resources(self):
         r = []
@@ -662,7 +686,7 @@ class Bot:
                             used = True
                     if used:
                         continue
-                    self.build("drill", i.Position.position)
+                    self.build("drill", i.Position.position, True)
                     break
 
     def ensure_pumps(self, pump_counts):
@@ -677,7 +701,7 @@ class Bot:
                             used = True
                     if used:
                         continue
-                    self.build("pump", i.Position.position)
+                    self.build("pump", i.Position.position, True)
                     break
 
     def ensure_arsenal(self):
@@ -770,6 +794,17 @@ class Bot:
             close_positions = self.get_points_in_radius(self.main_building.Position.position, 60)
             self.build_construction("bot assembler", 1, close_positions)
 
+    def control_units(self, name, factory_name, min_n, max_n):
+        paladins = self.find_units(name)
+        if len(paladins) >= max_n:
+            for i in self.find_units(factory_name):
+                if i.Recipe.recipe == self.recipes_prototypes[name]['id']:
+                    self.game.commands.command_set_priority(i.Id, 0)
+        if len(paladins) < min_n:
+            for i in self.find_units(factory_name):
+                if i.Recipe.recipe == self.recipes_prototypes[name]['id']:
+                    self.game.commands.command_set_priority(i.Id, 1)
+
     def update_callback_closure(self):
         def update_callback(stepping):
             if not stepping:
@@ -810,8 +845,22 @@ class Bot:
                 self.update_pumps_by_type()
                 self.update_constructed_pumps_by_type()
 
-                self.ensure_drills({'metal': 3, 'crystals': 1})
-                self.ensure_pumps({'oil': 1, 'aether': 1})
+                try:
+                    if len(self.find_units('drill')) >= 3:
+                        self.ensure_drills({'metal': 3, 'crystals': 1})
+                    elif len(self.find_units('drill')) >= 2:
+                        self.ensure_drills({'metal': 2, 'crystals': 1})
+                    else:
+                        self.ensure_drills({'metal': 2})
+
+                    if len(self.find_units('juggernaut')) >= 1:
+                        self.ensure_pumps({'oil': 1, 'aether': 1})
+                    elif len(self.find_units('factory')) >= 1:
+                        self.ensure_pumps({'oil': 1})
+
+                except Exception as e:
+                    print(e)
+
                 try:
                     self.build_buildings()
                 except Exception as e:
@@ -819,7 +868,11 @@ class Bot:
 
                 # self.ensure_concrete_plants()
                 # self.ensure_factories()
-                self.ensure_talos(n=30)
+                try:
+                    aa = 0
+                    self.ensure_talos(n=10)
+                except Exception as e:
+                    print(e)
                 # self.ensure_laboratory()
                 # self.ensure_arsenal()
                 # # self.ensure_arsenal2()
@@ -833,19 +886,40 @@ class Bot:
                 if self.step % 50 == 1:
                     pprint(resource_count)
 
-                for i in self.find_units("factory"):
-                    self.game.commands.command_set_priority(i.Id, 0)
-                    # self.game.commands.command_set_priority(i.Id, 1)
+                # for i in self.find_units("factory"):
+                #     # self.game.commands.command_set_priority(i.Id, 0)
+                #     self.game.commands.command_set_priority(i.Id, 1)
 
                 try:
-                    if resource_count["reinforced concrete"] > 12:
+                    if resource_count["reinforced concrete"] > 20:
                         for i in self.find_units("concrete plant"):
                             self.game.commands.command_set_priority(i.Id, uw.Priority.Disabled)
 
-                    if resource_count["reinforced concrete"] < 4:
+                    if resource_count["reinforced concrete"] < 8:
                         for i in self.find_units("concrete plant"):
                             self.game.commands.command_set_priority(i.Id, uw.Priority.Normal)
                 except Exception as e:
+                    print(e)
+
+                try:
+                    self.control_units('paladin', 'factory', 5, 10)
+                    self.control_units('juggernaut', 'bot assembler', 5, 10)
+                    self.control_units('ATV', 'factory', 11, 20)
+                except Exception as e:
+                    print(e)
+
+                try:
+                    to_delete = [
+                    ]
+                    for id_ in to_delete:
+                        if id_ in self.game.world.entities():
+                            if self.game.world.entities()[id_].own():
+                                print('deleting', id_)
+                                self.game.commands.command_self_destruct(id_)
+                            else:
+                                print('not own to delete')
+                except Exception as e:
+                    print('failed to delete')
                     print(e)
 
                 # Repair buildings
